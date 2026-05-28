@@ -17,7 +17,7 @@ type ReviewFinding struct {
 	File        string `json:"file"`
 	Line        int    `json:"line"`
 	Severity    string `json:"severity"` // HIGH, MEDIUM, LOW
-	Category    string `json:"category"` // Bug, Security, Performance, Logic, Style
+	Category    string `json:"category"` // Bug, Security, Performance, Logic
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Suggestion  string `json:"suggestion"`
@@ -34,54 +34,32 @@ type ReviewResult struct {
 	ReviewedAt   string          `json:"reviewed_at"`
 	Summary      string          `json:"summary"`
 	Duration     string          `json:"duration"`
+	Usage        *ReviewUsage    `json:"usage,omitempty"`
 }
 
-// ReviewConfig holds review configuration
-type ReviewConfig struct {
-	APIKey   string `json:"api_key"`
-	BaseURL  string `json:"base_url"`
-	Model    string `json:"model"`
-	FreeMode bool   `json:"free_mode"`
+// ReviewUsage shows plan and remaining reviews
+type ReviewUsage struct {
+	Plan      string `json:"plan"`
+	Remaining int    `json:"remaining"`
 }
 
-// DefaultReviewConfig returns the default configuration for free period
-func DefaultReviewConfig() *ReviewConfig {
-	// Check for user-provided API key first
-	apiKey := os.Getenv("SHIPMATE_AI_KEY")
-	if apiKey == "" {
-		// Use free tier OpenRouter models during free period
-		apiKey = "sk-or-v1-free-tier" // Placeholder — real key from env
+// reviewAPIBase is the backend API URL
+// Can be overridden with SHIPMATE_REVIEW_URL env var
+func reviewAPIBase() string {
+	if url := os.Getenv("SHIPMATE_REVIEW_URL"); url != "" {
+		return url
 	}
-
-	baseURL := os.Getenv("SHIPMATE_AI_URL")
-	if baseURL == "" {
-		baseURL = "https://openrouter.ai/api/v1/chat/completions"
-	}
-
-	model := os.Getenv("SHIPMATE_AI_MODEL")
-	if model == "" {
-		model = "deepseek/deepseek-chat-v3-0324:free"
-	}
-
-	return &ReviewConfig{
-		APIKey:   apiKey,
-		BaseURL:  baseURL,
-		Model:    model,
-		FreeMode: true, // Free during beta period
-	}
+	return "https://api.myshipmate.cc"
 }
 
-// ReviewCode performs a code review on the current project
+// ReviewCode performs a code review by calling the Shipmate Review API
 func ReviewCode(project *ProjectInfo) (*ReviewResult, error) {
 	start := time.Now()
-	config := DefaultReviewConfig()
 
-	// Check auth for paid mode (bypassed during free period)
-	if !config.FreeMode {
-		token, err := GetToken("shipmate")
-		if err != nil || token == "" {
-			return nil, fmt.Errorf("code review requires a Shipmate Cloud account.\n  Run: shipmate login shipmate\n  Or visit: https://myshipmate.cc/pricing")
-		}
+	// Check authentication — requires Shipmate Cloud login
+	token, err := GetToken("shipmate")
+	if err != nil || token == "" {
+		return nil, fmt.Errorf("code review requires a Shipmate Cloud account\n\n  Run: shipmate login shipmate\n  Then try again.\n\n  Free during beta — 5 reviews/month.\n  Visit: https://myshipmate.cc/pricing")
 	}
 
 	fmt.Println("   📖 Scanning project files...")
@@ -102,15 +80,73 @@ func ReviewCode(project *ProjectInfo) (*ReviewResult, error) {
 	}
 
 	fmt.Printf("   ✓ Found %d files (%d lines of code)\n", len(files), totalLines)
-	fmt.Println("   🤖 Sending to AI reviewer...")
+	fmt.Println("   🤖 Sending to Shipmate Review API...")
 
-	// Build the review prompt with all code
-	prompt := buildReviewPrompt(project, files)
+	// Build API request
+	reqFiles := make([]map[string]interface{}, 0, len(files))
+	for _, f := range files {
+		reqFiles = append(reqFiles, map[string]interface{}{
+			"path":    f.relPath,
+			"content": f.content,
+			"lines":   f.lines,
+		})
+	}
 
-	// Send to AI for review
-	findings, summary, err := performAIReview(config, prompt)
+	reqBody := map[string]interface{}{
+		"project_name": project.Name,
+		"project_type": string(project.Type),
+		"files":        reqFiles,
+	}
+
+	bodyBytes, _ := json.Marshal(reqBody)
+
+	// Call the Shipmate Review API
+	req, err := http.NewRequest("POST", reviewAPIBase()+"/api/v1/review", bytes.NewReader(bodyBytes))
 	if err != nil {
-		return nil, fmt.Errorf("AI review failed: %w", err)
+		return nil, fmt.Errorf("request creation failed: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 180 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respData, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != 200 {
+		// Parse error response
+		var errResp map[string]interface{}
+		json.Unmarshal(respData, &errResp)
+
+		if resp.StatusCode == 401 {
+			return nil, fmt.Errorf("authentication failed\n\n  Your Shipmate Cloud token is invalid or expired.\n  Run: shipmate login shipmate\n  Then try again.")
+		}
+
+		if resp.StatusCode == 402 {
+			return nil, fmt.Errorf("free tier limit reached (5 reviews/month)\n\n  Upgrade to Shipmate Cloud Pro for unlimited reviews.\n  Visit: https://myshipmate.cc/pricing")
+		}
+
+		if errMsg, ok := errResp["error"].(string); ok {
+			return nil, fmt.Errorf("review API error (%d): %s", resp.StatusCode, errMsg)
+		}
+
+		return nil, fmt.Errorf("review API error (%d): %s", resp.StatusCode, string(respData))
+	}
+
+	// Parse successful response
+	var apiResp struct {
+		Findings []ReviewFinding `json:"findings"`
+		Summary  string          `json:"summary"`
+		Usage    *ReviewUsage    `json:"usage"`
+	}
+
+	if err := json.Unmarshal(respData, &apiResp); err != nil {
+		return nil, fmt.Errorf("response parse failed: %w", err)
 	}
 
 	elapsed := time.Since(start)
@@ -120,10 +156,11 @@ func ReviewCode(project *ProjectInfo) (*ReviewResult, error) {
 		ProjectType:  string(project.Type),
 		FilesScanned: len(files),
 		TotalLines:   totalLines,
-		Findings:     findings,
+		Findings:     apiResp.Findings,
 		ReviewedAt:   time.Now().Format(time.RFC3339),
-		Summary:      summary,
+		Summary:      apiResp.Summary,
 		Duration:     elapsed.Round(time.Millisecond).String(),
+		Usage:        apiResp.Usage,
 	}
 
 	return result, nil
@@ -131,7 +168,6 @@ func ReviewCode(project *ProjectInfo) (*ReviewResult, error) {
 
 // ReviewFile represents a file being reviewed
 type ReviewFile struct {
-	path    string
 	relPath string
 	content string
 	lines   int
@@ -141,7 +177,7 @@ type ReviewFile struct {
 func collectReviewFiles(project *ProjectInfo) ([]ReviewFile, error) {
 	var files []ReviewFile
 
-	// Extensions to review (skip binaries, configs, etc.)
+	// Extensions to review
 	reviewExts := map[string]bool{
 		".go": true, ".js": true, ".ts": true, ".jsx": true, ".tsx": true,
 		".py": true, ".rb": true, ".java": true, ".kt": true, ".rs": true,
@@ -191,7 +227,6 @@ func collectReviewFiles(project *ProjectInfo) ([]ReviewFile, error) {
 		lines := strings.Count(string(content), "\n") + 1
 
 		files = append(files, ReviewFile{
-			path:    path,
 			relPath: relPath,
 			content: string(content),
 			lines:   lines,
@@ -201,142 +236,6 @@ func collectReviewFiles(project *ProjectInfo) ([]ReviewFile, error) {
 	})
 
 	return files, err
-}
-
-// buildReviewPrompt creates the AI review prompt
-func buildReviewPrompt(project *ProjectInfo, files []ReviewFile) string {
-	var sb strings.Builder
-
-	sb.WriteString("You are a senior code reviewer. Review the following project for bugs, security issues, performance problems, and bad logic patterns.\n\n")
-	sb.WriteString(fmt.Sprintf("Project: %s (Type: %s)\n", project.Name, project.Type))
-	sb.WriteString(fmt.Sprintf("Files: %d\n\n", len(files)))
-
-	sb.WriteString("## Review Guidelines\n")
-	sb.WriteString("- Look for: bugs, null/nil pointer dereferences, unhandled errors, SQL injection, XSS, race conditions, memory leaks, logic errors, missing validation\n")
-	sb.WriteString("- Focus on HIGH and MEDIUM severity issues\n")
-	sb.WriteString("- Be specific: reference exact file names and line numbers\n")
-	sb.WriteString("- Do NOT suggest style/formatting changes unless they cause bugs\n")
-	sb.WriteString("- Do NOT fix the code — only report findings\n\n")
-
-	sb.WriteString("## Output Format\n")
-	sb.WriteString("Respond in valid JSON only. No markdown, no explanation outside JSON.\n\n")
-	sb.WriteString("```json\n")
-	sb.WriteString("{\n")
-	sb.WriteString("  \"findings\": [\n")
-	sb.WriteString("    {\n")
-	sb.WriteString("      \"file\": \"path/to/file.go\",\n")
-	sb.WriteString("      \"line\": 42,\n")
-	sb.WriteString("      \"severity\": \"HIGH|MEDIUM|LOW\",\n")
-	sb.WriteString("      \"category\": \"Bug|Security|Performance|Logic|Style\",\n")
-	sb.WriteString("      \"title\": \"Short title\",\n")
-	sb.WriteString("      \"description\": \"Detailed explanation of the issue\",\n")
-	sb.WriteString("      \"suggestion\": \"How to fix it\",\n")
-	sb.WriteString("      \"code_snippet\": \"the problematic code\"\n")
-	sb.WriteString("    }\n")
-	sb.WriteString("  ],\n")
-	sb.WriteString("  \"summary\": \"Overall assessment of the codebase quality\"\n")
-	sb.WriteString("}\n")
-	sb.WriteString("```\n\n")
-
-	sb.WriteString("## Code to Review\n\n")
-
-	// Limit total code to ~15000 tokens to stay within model limits
-	totalChars := 0
-	maxChars := 45000 // ~15k tokens
-
-	for _, f := range files {
-		fileBlock := fmt.Sprintf("### File: %s (%d lines)\n```\n%s\n```\n\n", f.relPath, f.lines, f.content)
-		if totalChars+len(fileBlock) > maxChars {
-			sb.WriteString(fmt.Sprintf("### File: %s (%d lines)\n[TRUNCATED — file too large for full review]\n\n", f.relPath, f.lines))
-			continue
-		}
-		sb.WriteString(fileBlock)
-		totalChars += len(fileBlock)
-	}
-
-	return sb.String()
-}
-
-// performAIReview sends the code to an AI model for review
-func performAIReview(config *ReviewConfig, prompt string) ([]ReviewFinding, string, error) {
-	body := map[string]interface{}{
-		"model": config.Model,
-		"messages": []map[string]string{
-			{
-				"role":    "system",
-				"content": "You are an expert code reviewer. You respond only in valid JSON. Never include markdown formatting or explanations outside the JSON object.",
-			},
-			{
-				"role":    "user",
-				"content": prompt,
-			},
-		},
-		"temperature": 0.2,
-		"max_tokens":  4096,
-	}
-
-	bodyBytes, _ := json.Marshal(body)
-
-	req, err := http.NewRequest("POST", config.BaseURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, "", err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+config.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, "", fmt.Errorf("API request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return nil, "", fmt.Errorf("API error (%d): %s", resp.StatusCode, string(data))
-	}
-
-	var result struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, "", fmt.Errorf("response decode failed: %w", err)
-	}
-
-	if len(result.Choices) == 0 {
-		return nil, "", fmt.Errorf("no response from AI model")
-	}
-
-	content := result.Choices[0].Message.Content
-
-	// Parse the JSON response from the AI
-	// Strip markdown code fences if present
-	content = strings.TrimSpace(content)
-	if strings.HasPrefix(content, "```json") {
-		content = strings.TrimPrefix(content, "```json")
-		content = strings.TrimSuffix(content, "```")
-	} else if strings.HasPrefix(content, "```") {
-		content = strings.TrimPrefix(content, "```")
-		content = strings.TrimSuffix(content, "```")
-	}
-	content = strings.TrimSpace(content)
-
-	var reviewResponse struct {
-		Findings []ReviewFinding `json:"findings"`
-		Summary  string          `json:"summary"`
-	}
-
-	if err := json.Unmarshal([]byte(content), &reviewResponse); err != nil {
-		return nil, "", fmt.Errorf("AI response parse failed: %w\nRaw: %s", err, content[:min(200, len(content))])
-	}
-
-	return reviewResponse.Findings, reviewResponse.Summary, nil
 }
 
 // GenerateReviewReport creates the SHIPMATE_REVIEW.md file
@@ -374,6 +273,10 @@ func GenerateReviewReport(result *ReviewResult) error {
 	sb.WriteString(fmt.Sprintf("| 🔴 HIGH   | %d    |\n", high))
 	sb.WriteString(fmt.Sprintf("| 🟡 MEDIUM | %d    |\n", medium))
 	sb.WriteString(fmt.Sprintf("| 🔵 LOW    | %d    |\n\n", low))
+
+	if result.Usage != nil {
+		sb.WriteString(fmt.Sprintf("**Plan:** %s | **Reviews remaining:** %d this month\n\n", result.Usage.Plan, result.Usage.Remaining))
+	}
 
 	if len(result.Findings) == 0 {
 		sb.WriteString("## ✅ No Issues Found\n\n")
@@ -472,6 +375,11 @@ func DisplayReviewSummary(result *ReviewResult) {
 			fmt.Printf("      %s %s — %s\n", severity, f.File, f.Title)
 			shown++
 		}
+	}
+
+	if result.Usage != nil {
+		fmt.Println()
+		fmt.Printf("   📊 Plan: %s | %d reviews remaining this month\n", result.Usage.Plan, result.Usage.Remaining)
 	}
 
 	fmt.Println()

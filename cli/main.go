@@ -315,7 +315,8 @@ var reviewCmd = &cobra.Command{
 
 Creates a SHIPMATE_REVIEW.md file at the project root with all findings.
 
-Currently FREE during beta. Will require Shipmate Cloud account in the future.`,
+FREE during beta — 5 reviews/month. Requires Shipmate Cloud login.
+Run: shipmate login shipmate`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		displayBanner()
 
