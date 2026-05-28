@@ -49,7 +49,7 @@ func reviewAPIBase() string {
 	if url := os.Getenv("SHIPMATE_REVIEW_URL"); url != "" {
 		return url
 	}
-	return "https://api.myshipmate.cc"
+	return "https://myshipmate-review-api.fly.dev"
 }
 
 // ReviewCode performs a code review by calling the Shipmate Review API
