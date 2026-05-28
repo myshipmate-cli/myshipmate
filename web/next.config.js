@@ -5,6 +5,7 @@ const nextConfig = {
   async rewrites() {
     return [
       { source: '/install', destination: '/install.sh' },
+      { source: '/install.ps1', destination: '/install.ps1' },
     ];
   },
 };

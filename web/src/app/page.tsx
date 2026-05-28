@@ -1,3 +1,5 @@
+import CopyButton from "@/components/CopyButton";
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white">
@@ -21,7 +23,7 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center mb-20">
           <div className="inline-block bg-emerald-500/10 text-emerald-400 text-sm px-4 py-1.5 rounded-full mb-6 border border-emerald-500/20">
-            v0.1.0 — Now with Heroku support
+            v0.2.0 — Now with AI Code Review
           </div>
           <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
             Deploy anywhere.<br />One command.
@@ -30,12 +32,21 @@ export default function Home() {
             Shipmate detects your project type, generates an optimized Dockerfile, and deploys to the right platform — all with a single command.
           </p>
 
-          {/* Install Command */}
-          <div className="bg-slate-950 rounded-xl p-6 inline-block mb-8 border border-slate-700/50 shadow-2xl">
-            <div className="flex items-center gap-4">
+          {/* Install Commands */}
+          <div className="grid md:grid-cols-2 gap-4 mb-8">
+            <div className="bg-slate-950 rounded-lg p-6 border border-slate-700/50 relative">
+              <div className="text-sm text-slate-400 mb-2 font-mono">Linux / macOS</div>
               <code className="text-green-400 text-lg font-mono">
-                $ curl -fsSL myshipmate.fly.dev/install | sh
+                curl -fsSL myshipmate.fly.dev/install | sh
               </code>
+              <CopyButton text="curl -fsSL myshipmate.fly.dev/install | sh" />
+            </div>
+            <div className="bg-slate-950 rounded-lg p-6 border border-slate-700/50 relative">
+              <div className="text-sm text-slate-400 mb-2 font-mono">Windows (PowerShell)</div>
+              <code className="text-green-400 text-lg font-mono">
+                iwr myshipmate.fly.dev/install.ps1 | iex
+              </code>
+              <CopyButton text="iwr myshipmate.fly.dev/install.ps1 | iex" />
             </div>
           </div>
           <p className="text-sm text-slate-500">Or install with Go: <code className="text-slate-400">go install github.com/myshipmate-cli/myshipmate@latest</code></p>
@@ -264,10 +275,21 @@ $ shipmate
           <p className="text-slate-400 mb-8 max-w-lg mx-auto">
             Stop wasting time on deployment configuration. Shipmate handles it all so you can focus on building.
           </p>
-          <div className="bg-slate-950 rounded-xl p-4 inline-block border border-slate-700/50">
-            <code className="text-green-400 font-mono">
-              $ curl -fsSL myshipmate.fly.dev/install | sh
-            </code>
+          <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto mb-8">
+            <div className="bg-slate-950 rounded-xl p-4 border border-slate-700/50 relative">
+              <div className="text-xs text-slate-400 mb-1">Linux / macOS</div>
+              <code className="text-green-400 font-mono text-sm">
+                curl -fsSL myshipmate.fly.dev/install | sh
+              </code>
+              <CopyButton text="curl -fsSL myshipmate.fly.dev/install | sh" />
+            </div>
+            <div className="bg-slate-950 rounded-xl p-4 border border-slate-700/50 relative">
+              <div className="text-xs text-slate-400 mb-1">Windows (PowerShell)</div>
+              <code className="text-green-400 font-mono text-sm">
+                iwr myshipmate.fly.dev/install.ps1 | iex
+              </code>
+              <CopyButton text="iwr myshipmate.fly.dev/install.ps1 | iex" />
+            </div>
           </div>
         </div>
 
