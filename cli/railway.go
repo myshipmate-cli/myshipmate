@@ -541,6 +541,23 @@ func FlyioDeploy(project *ProjectInfo, envVars []EnvVar) error {
 
 	fmt.Println("   ✓ Found flyctl")
 
+	// Check if user is authenticated with Fly.io
+	if !flyioIsAuthenticated(flyPath) {
+		fmt.Println()
+		fmt.Println("   🔐 You need to log in to Fly.io first.")
+		fmt.Println("   Opening browser for authentication...")
+		fmt.Println()
+		
+		if err := flyioLogin(flyPath); err != nil {
+			return fmt.Errorf("fly.io authentication failed: %w", err)
+		}
+		
+		fmt.Println("   ✓ Authenticated with Fly.io")
+		fmt.Println()
+	} else {
+		fmt.Println("   ✓ Already authenticated with Fly.io")
+	}
+
 	// If fly.toml is absent, launch the app (without deploying — we'll do that after
 	// secrets are set). If fly.toml already exists, skip launch and go straight to deploy.
 	flyTomlPath := project.Path + string(os.PathSeparator) + "fly.toml"
@@ -596,5 +613,37 @@ func FlyioDeploy(project *ProjectInfo, envVars []EnvVar) error {
 		DeployURL:   appURL,
 	})
 
+	return nil
+}
+
+// flyioIsAuthenticated checks if the user is authenticated with Fly.io
+func flyioIsAuthenticated(flyPath string) bool {
+	cmd := exec.Command(flyPath, "auth", "whoami")
+	output, err := cmd.CombinedOutput()
+	
+	// If command succeeds and returns a user email/name, user is authenticated
+	if err == nil && len(output) > 0 {
+		return true
+	}
+	
+	// Alternative check: try to get auth token
+	cmd = exec.Command(flyPath, "auth", "token")
+	output, err = cmd.CombinedOutput()
+	
+	return err == nil && len(output) > 0
+}
+
+// flyioLogin handles the Fly.io authentication flow
+func flyioLogin(flyPath string) error {
+	// flyctl auth login opens a browser for OAuth authentication
+	cmd := exec.Command(flyPath, "auth", "login")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("login failed: %w", err)
+	}
+	
 	return nil
 }
