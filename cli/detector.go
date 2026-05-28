@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,10 +106,125 @@ func DetectProject() (*ProjectInfo, error) {
 	// Detect project type
 	info.Type = detectType()
 
+	// If not found in root, scan subdirectories
+	if info.Type == ProjectUnknown {
+		subprojects := scanSubdirectories(cwd)
+		if len(subprojects) > 0 {
+			return handleSubprojects(subprojects)
+		}
+	}
+
 	// Set default commands based on project type
 	setDefaultCommands(info)
 
 	return info, nil
+}
+
+// scanSubdirectories walks subdirectories (up to 2 levels) and detects projects
+func scanSubdirectories(root string) []*ProjectInfo {
+	var projects []*ProjectInfo
+	maxDepth := 2
+
+	// Directories to skip
+	skipDirs := map[string]bool{
+		".git": true, "node_modules": true, "vendor": true,
+		"__pycache__": true, ".venv": true, "venv": true,
+		"build": true, "dist": true, ".next": true,
+		"target": true, ".cache": true, "coverage": true,
+	}
+
+	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		// Skip non-directories
+		if !info.IsDir() {
+			return nil
+		}
+
+		// Calculate depth
+		relPath, _ := filepath.Rel(root, path)
+		depth := strings.Count(relPath, string(filepath.Separator))
+		if relPath == "." {
+			depth = 0
+		}
+
+		// Stop if too deep
+		if depth > maxDepth {
+			return filepath.SkipDir
+		}
+
+		// Skip certain directories
+		if skipDirs[info.Name()] {
+			return filepath.SkipDir
+		}
+
+		// Skip root directory (already checked)
+		if path == root {
+			return nil
+		}
+
+		// Try to detect project in this directory
+		origDir, _ := os.Getwd()
+		os.Chdir(path)
+		defer os.Chdir(origDir)
+
+		projectType := detectType()
+		if projectType != ProjectUnknown {
+			projectInfo := &ProjectInfo{
+				Type:            projectType,
+				Name:            filepath.Base(path),
+				Path:            path,
+				HasDocker:       fileExists("Dockerfile"),
+				HasEnvFile:      fileExists(".env") || fileExists(".env.local") || fileExists(".env.production"),
+				HasDockerIgnore: fileExists(".dockerignore"),
+			}
+			setDefaultCommands(projectInfo)
+			projects = append(projects, projectInfo)
+		}
+
+		return nil
+	})
+
+	return projects
+}
+
+// handleSubprojects presents subprojects to user and returns selected one
+func handleSubprojects(projects []*ProjectInfo) (*ProjectInfo, error) {
+	if len(projects) == 1 {
+		// Auto-select the only project
+		fmt.Printf("\n📁 Found project in subdirectory: %s/%s\n", filepath.Base(filepath.Dir(projects[0].Path)), projects[0].Name)
+		fmt.Printf("   Type: %s\n\n", projects[0].Type)
+		
+		// Change to that directory
+		os.Chdir(projects[0].Path)
+		return projects[0], nil
+	}
+
+	// Multiple projects found - let user choose
+	fmt.Printf("\n📁 Found %d projects in subdirectories:\n\n", len(projects))
+	for i, p := range projects {
+		relPath, _ := filepath.Rel(mustGetwd(), p.Path)
+		fmt.Printf("   [%d] %s (%s)\n", i+1, relPath, p.Type)
+	}
+
+	fmt.Print("\n   Select project (number): ")
+	var choice int
+	fmt.Scanln(&choice)
+
+	if choice < 1 || choice > len(projects) {
+		return nil, fmt.Errorf("invalid selection")
+	}
+
+	selected := projects[choice-1]
+	os.Chdir(selected.Path)
+	return selected, nil
+}
+
+func mustGetwd() string {
+	wd, _ := os.Getwd()
+	return wd
 }
 
 func detectType() ProjectType {
