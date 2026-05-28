@@ -206,6 +206,15 @@ func LoginToPlatform(platform string) error {
   2. Scroll down to "API Key" section
   3. Click "Reveal" to show your API key
   4. Copy the key and paste it below`
+	case "shipmate":
+		tokenURL = "https://myshipmate.cc/dashboard/tokens"
+		instructions = `Shipmate Cloud Login:
+  1. Opening browser to Shipmate Cloud dashboard...
+  2. Create an API token
+  3. Copy the token and paste it below
+  
+  Note: Shipmate Cloud unlocks AI code review, team features,
+  and deployment through our managed accounts (pay in Naira).`
 	default:
 		return fmt.Errorf("unknown platform: %s", platform)
 	}

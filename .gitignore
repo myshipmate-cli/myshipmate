@@ -22,6 +22,9 @@ cli/cli
 cli/*.exe
 *.exe
 
+# Shipmate
+SHIPMATE_REVIEW.md
+
 # Misc
 .DS_Store
 *.pem

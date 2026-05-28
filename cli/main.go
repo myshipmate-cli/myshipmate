@@ -38,6 +38,8 @@ Example:
 	Version: version,
 }
 
+var reviewBeforeDeploy bool
+
 var shipCmd = &cobra.Command{
 	Use:     "ship",
 	Aliases: []string{"deploy", "s"},
@@ -67,6 +69,31 @@ and deploys to the recommended platform with one command.`,
 		}
 
 		fmt.Println("🔍 Project detected:")
+
+		// Optional: Run code review before deploying
+		if reviewBeforeDeploy {
+			fmt.Println()
+			fmt.Println("📖 Running AI code review before deploy...")
+			result, err := ReviewCode(deployer.Project)
+			if err != nil {
+				fmt.Printf("   ⚠ Review failed: %v\n", err)
+				fmt.Println("   Continuing with deployment...")
+			} else {
+				GenerateReviewReport(result)
+				DisplayReviewSummary(result)
+
+				// Ask if user wants to continue deploying
+				fmt.Print("   Continue with deployment? (y/n): ")
+				var answer string
+				fmt.Scanln(&answer)
+				answer = strings.TrimSpace(strings.ToLower(answer))
+				if answer != "y" && answer != "yes" {
+					fmt.Println("   ✗ Deployment cancelled.")
+					return nil
+				}
+				fmt.Println()
+			}
+		}
 
 		// Run the full deployment workflow
 		if err := deployer.Run(); err != nil {
@@ -277,13 +304,66 @@ var envCmd = &cobra.Command{
 	},
 }
 
+var reviewCmd = &cobra.Command{
+	Use:   "review",
+	Short: "AI code review — find bugs, security issues, and bad logic",
+	Long: `Reviews your project code using AI to find:
+  - Bugs and nil/null pointer issues
+  - Security vulnerabilities (SQL injection, XSS, etc.)
+  - Performance problems
+  - Bad logic patterns and race conditions
+
+Creates a SHIPMATE_REVIEW.md file at the project root with all findings.
+
+Currently FREE during beta. Will require Shipmate Cloud account in the future.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		displayBanner()
+
+		// Detect project
+		project, err := DetectProject()
+		if err != nil {
+			return fmt.Errorf("project detection failed: %w", err)
+		}
+
+		if project.Type == ProjectUnknown {
+			fmt.Println("   ⚠ Could not detect project type")
+			fmt.Println("   Make sure you're in a project directory.")
+			return nil
+		}
+
+		fmt.Println("🔍 Code Review")
+		fmt.Printf("   Project: %s (%s)\n", project.Name, project.Type)
+		fmt.Println()
+
+		// Run the review
+		result, err := ReviewCode(project)
+		if err != nil {
+			return fmt.Errorf("review failed: %w", err)
+		}
+
+		// Generate report file
+		if err := GenerateReviewReport(result); err != nil {
+			return fmt.Errorf("report generation failed: %w", err)
+		}
+
+		// Display terminal summary
+		DisplayReviewSummary(result)
+
+		return nil
+	},
+}
+
 func main() {
+	// Register flags
+	shipCmd.Flags().BoolVarP(&reviewBeforeDeploy, "review", "r", false, "Run AI code review before deploying")
+
 	rootCmd.AddCommand(shipCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(envCmd)
+	rootCmd.AddCommand(reviewCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

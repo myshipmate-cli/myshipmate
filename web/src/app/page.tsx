@@ -205,6 +205,7 @@ $ shipmate
               { title: 'One Command', desc: 'No config files, no YAML, no setup. Just run shipmate.', icon: '✨' },
               { title: 'Smart Recommendations', desc: 'Recommends the best platform for your specific project type.', icon: '🎯' },
               { title: 'Deploy History', desc: 'Tracks your deployments and lets you redeploy with one command.', icon: '📋' },
+              { title: 'AI Code Review', desc: 'Find bugs, security issues, and bad logic before you deploy. Free during beta.', icon: '🤖' },
             ].map((f) => (
               <div key={f.title} className="bg-slate-800/50 p-6 rounded-xl border border-slate-700/50">
                 <div className="text-2xl mb-3">{f.icon}</div>
@@ -244,6 +245,14 @@ $ shipmate
               <div className="flex gap-4">
                 <code className="text-emerald-400 whitespace-nowrap">shipmate logout</code>
                 <span className="text-slate-400">Remove stored credentials</span>
+              </div>
+              <div className="flex gap-4">
+                <code className="text-emerald-400 whitespace-nowrap">shipmate review</code>
+                <span className="text-slate-400">AI code review — find bugs & security issues</span>
+              </div>
+              <div className="flex gap-4">
+                <code className="text-emerald-400 whitespace-nowrap">shipmate ship -r</code>
+                <span className="text-slate-400">Review code, then deploy if clean</span>
               </div>
             </div>
           </div>
