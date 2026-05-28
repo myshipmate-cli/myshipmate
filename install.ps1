@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$Repo = "emmogba/myshipmate"
+$Repo = "myshipmate-cli/myshipmate"
 $Version = "v0.1.0"
 $InstallDir = "$env:LOCALAPPDATA\Shipmate"
 
@@ -49,7 +49,7 @@ try {
     Write-Host ""
     Write-Host "  To install from source, you need Go:" -ForegroundColor White
     Write-Host "    1. Install Go from https://go.dev/dl/" -ForegroundColor White
-    Write-Host "    2. Run: go install github.com/emmogba/myshipmate@latest" -ForegroundColor White
+    Write-Host "    2. Run: go install github.com/myshipmate-cli/myshipmate@latest" -ForegroundColor White
     Write-Host ""
     exit 1
 }

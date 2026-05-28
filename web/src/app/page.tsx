@@ -12,7 +12,7 @@ export default function Home() {
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a href="#platforms" className="hover:text-white transition-colors">Platforms</a>
             <a href="#languages" className="hover:text-white transition-colors">Languages</a>
-            <a href="https://github.com/emmogba/myshipmate" className="hover:text-white transition-colors">GitHub</a>
+            <a href="https://github.com/myshipmate-cli/myshipmate" className="hover:text-white transition-colors">GitHub</a>
           </div>
         </div>
       </nav>
@@ -38,7 +38,7 @@ export default function Home() {
               </code>
             </div>
           </div>
-          <p className="text-sm text-slate-500">Or install with Go: <code className="text-slate-400">go install github.com/emmogba/myshipmate@latest</code></p>
+          <p className="text-sm text-slate-500">Or install with Go: <code className="text-slate-400">go install github.com/myshipmate-cli/myshipmate@latest</code></p>
         </div>
 
         {/* How It Works */}

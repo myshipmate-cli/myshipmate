@@ -13,7 +13,7 @@ curl -fsSL myshipmate.cc/install | sh
 Or install with Go:
 
 ```bash
-go install github.com/emmogba/myshipmate@latest
+go install github.com/myshipmate-cli/myshipmate@latest
 ```
 
 ## Quick Start
@@ -173,7 +173,7 @@ MIT
 ## Links
 
 - Website: https://myshipmate.cc
-- GitHub: https://github.com/emmogba/myshipmate
+- GitHub: https://github.com/myshipmate-cli/myshipmate
 - Twitter: @shipmate_dev
 
 ---

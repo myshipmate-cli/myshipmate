@@ -3,7 +3,7 @@
 
 set -e
 
-REPO="emmogba/myshipmate"
+REPO="myshipmate-cli/myshipmate"
 GITHUB_API="https://api.github.com/repos/${REPO}/releases/latest"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 BINARY_NAME="shipmate"

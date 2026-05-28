@@ -83,7 +83,7 @@ release:
 	git push origin $(VERSION)
 	@echo ""
 	@echo "✓ Tag pushed. GitHub Actions will build and publish the release."
-	@echo "  Monitor at: https://github.com/emmogba/myshipmate/actions"
+	@echo "  Monitor at: https://github.com/myshipmate-cli/myshipmate/actions"
 
 # Format code
 fmt:
