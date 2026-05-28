@@ -1,4 +1,4 @@
-module github.com/shipmate/cli
+module github.com/emmogba/myshipmate
 
 go 1.21
 

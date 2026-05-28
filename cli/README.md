@@ -9,7 +9,7 @@ Shipmate is a CLI tool that detects your project type, generates optimized Docke
 ### From Source (Go required)
 
 ```bash
-go install github.com/shipmate/cli@latest
+go install github.com/emmogba/myshipmate@latest
 ```
 
 ### Binary Download (Coming Soon)
@@ -344,7 +344,7 @@ MIT
 ## Links
 
 - Website: https://myshipmate.cc
-- GitHub: https://github.com/shipmate/cli
+- GitHub: https://github.com/emmogba/myshipmate
 
 ---
 
